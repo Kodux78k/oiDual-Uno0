@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>DUAL // UNO — Orbital Core [S-Class · Unified Loaders]</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#050505">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .then(() => console.log('Service Worker Registered'));
+  }
+</script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;400;600;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.7/purify.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #050505;
+      --surface: #0c0c0e;
+      --border: rgba(255,255,255,0.08);
+      --accent: #00f2ff;
+      --accent-glow: rgba(0, 242, 255, 0.35);
+      --purple: #bd00ff;
+      --warn: #ff4d4d;
+      --gold: #ffd700;
+      --font-ui: 'Inter', sans-serif;
+      --font-code: 'JetBrains Mono', monospace;
+      --ease: cubic-bezier(0.23, 1, 0.32, 1);
+      --ease-elastic: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+    html,body { height: 100%; }
+    body {
+      margin: 0; padding: 0; min-height: 100vh;
+      background: var(--bg); color: #fff; font-family: var(--font-ui);
+      display: flex; flex-direction: column; align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* ==== CANVAS BACKGROUND ==== */
+    #space-canvas {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 0; pointer-events: none; opacity: 0.6;
+    }
+
+    /* ---- DI loader (used in overlay + small variations) ---- */
+    .di { 
+      --di-gold: color-mix(in oklab, var(--accent) 60%, var(--purple) 40%); 
+      position: relative; width: 60px; height: 60px; display:inline-block;
+    }
+    .di .ring { 
+      position: absolute; inset: 0; border: 2px solid var(--di-gold); 
+      border-radius: 50%; animation: spin 3.6s linear infinite; 
+      border-top-color: transparent; border-bottom-color: transparent;
+    }
+    .di .stroke { 
+      position: absolute; left: 50%; top: 50%; width: 50%; height: 2px; 
+      background: linear-gradient(90deg, var(--accent), var(--purple)); 
+      transform: translate(-50%, -50%); border-radius: 999px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%,100% { opacity: 0.4; width: 40%; } 50% { opacity: 1; width: 60%; } }
+
+    /* ==== NUCLEUS (Orbital UI) ==== */
+    .nucleus-container {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 5000; transition: all 0.7s var(--ease-elastic);
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+    }
+    body.active .nucleus-container { top: 60px; transform: translate(-50%, 0) scale(0.9); }
+
+    .nucleus {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: rgba(0,0,0,0.75); border: 2px solid #222;
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; position: relative;
+      box-shadow: 0 0 30px rgba(0,0,0,0.8);
+      transition: 0.25s;
+    }
+    .nucleus:hover { border-color: var(--accent); box-shadow: 0 0 30px var(--accent-glow); }
+
+    .nucleus-ring {
+      position: absolute; inset: -8px; border-radius: 50%;
+      border: 1px solid rgba(0,242,255,0.08);
+      border-top-color: var(--accent);
+      animation: spin 3s linear infinite;
+    }
+
+    .vibe-pulse {
+      position: absolute; inset: -4px; border-radius: 50%;
+      border: 2px solid var(--gold); opacity: 0;
+    }
+    body.tesla-vibe .vibe-pulse { animation: tesla-ring 2s infinite; opacity: 1; }
+    @keyframes tesla-ring {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    .nucleus-label {
+      font-family: var(--font-code); font-size: 0.65rem; color: #777;
+      text-transform: uppercase; letter-spacing: 2px;
+      transition: opacity 0.3s;
+    }
+    body.active .nucleus-label { opacity: 0; }
+
+    /* ==== APP (cards, inputs) ==== */
+    .uno-app {
+      width: 100%; max-width: 680px; padding: calc(20px + var(--safe-top)) 18px 120px 18px;
+      margin-top: 160px; opacity: 0; transform: translateY(30px);
+      transition: all 0.6s var(--ease); pointer-events: none;
+      display: flex; flex-direction: column; gap: 15px; z-index: 10;
+    }
+    body.active .uno-app { opacity: 1; transform: translateY(0); pointer-events: all; }
+
+    .glass-card {
+      background: rgba(10, 10, 14, 0.6); backdrop-filter: blur(18px);
+      border: 1px solid var(--border); border-radius: 20px;
+      padding: 20px; position: relative; overflow: hidden;
+      box-shadow: 0 10px 40px -12px rgba(0,0,0,0.6);
+    }
+
+    .brand { font-weight: 900; font-size: 1.15rem; letter-spacing: -0.6px; }
+    .clock-section { text-align: right; font-family: var(--font-code); }
+    .clock-time { font-size: 1.1rem; font-weight: 700; color: var(--accent); text-shadow: 0 0 10px var(--accent-glow); }
+    .clock-date { font-size: 0.6rem; color: #666; }
+
+    .input-group { position: relative; margin-bottom: 12px; }
+    .main-input {
+      width: 100%; background: rgba(0,0,0,0.28); border: 1px solid var(--border);
+      padding: 14px 16px; border-radius: 12px; color: #fff;
+      font-family: var(--font-code); transition: 0.25s;
+    }
+    .main-input:focus { border-color: var(--accent); background: rgba(0,0,0,0.5); box-shadow: 0 0 12px rgba(0,242,255,0.06); }
+
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .btn {
+      flex: 1; min-width: 90px; height: 44px; border-radius: 10px;
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+      color: rgba(255,255,255,0.85); font-size: 0.75rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      cursor: pointer; transition: 0.18s; text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    .btn:hover { transform: translateY(-2px); background: rgba(255,255,255,0.05); }
+    .btn.primary { background: #fff; color: #000; border: none; }
+    .btn.warn { border-color: var(--warn); color: var(--warn); }
+    .btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,242,255,0.04); }
+
+    .modules-container { display: flex; flex-direction: column; gap: 10px; }
+    .module-item {
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+      border-radius: 14px; overflow: hidden; transition: 0.3s;
+    }
+    .module-head {
+      padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; user-select: none;
+    }
+    .module-body { max-height: 0; overflow: hidden; transition: max-height 0.38s var(--ease); padding: 0 14px; }
+    .module-item.open .module-body { max-height: 600px; padding-bottom: 14px; }
+
+    .code-editor {
+      width: 100%; min-height: 120px; background: #07070a; color: #a8bdd6;
+      font-family: var(--font-code); font-size: 0.78rem; padding: 12px; border-radius: 8px;
+      border: 1px solid #222; resize: vertical; line-height: 1.45;
+    }
+
+    .terminal-out { font-family: var(--font-code); font-size: 0.72rem; color: #8b9ab1; max-height: 120px; overflow-y: auto; white-space: pre-wrap; padding:8px; background: #06060a; border-radius:8px; border:1px solid #111; }
+
+    /* ==== OVERLAY (IDLE) ==== */
+    #overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+      z-index: 7000; display: grid; place-items: center; transition: 0.38s; opacity: 0; pointer-events: none;
+    }
+    #overlay.show { opacity: 1; pointer-events: auto; }
+    .overlay-content { text-align: center; }
+    .overlay-content h2 { margin: 12px 0 8px; font-size: 1.4rem; }
+
+    /* ==== RUNTIME VIEW ==== */
+    #runtime-view {
+      position: fixed; inset: 0; background: #000; z-index: 6000;
+      transform: translateY(100%); transition: 0.45s var(--ease); display:flex; flex-direction:column;
+    }
+    #runtime-view.visible { transform: translateY(0); }
+    .runtime-header { padding: 10px 16px; border-bottom: 1px solid #111; display:flex; justify-content:space-between; align-items:center; background: #050505; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
+      background: var(--accent); color: #000; padding: 10px 20px;
+      border-radius: 30px; font-weight: 700; font-size: 0.85rem;
+      z-index: 10001; display: none;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    @media (max-width: 520px) {
+      .uno-app { margin-top: 120px; padding: 14px; }
+      .nucleus { width: 64px; height: 64px; }
+      .brand { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body id="mainBody">
+
+  <canvas id="space-canvas"></canvas>
+
+  <!-- IDLE OVERLAY (keeps di loader) -->
+  <div id="overlay" aria-hidden="true">
+    <div class="overlay-content">
+      <div class="di" style="margin: 0 auto 18px auto; width:72px; height:72px;">
+        <div class="ring" style="border-width:2px;"></div>
+        <div class="stroke"></div>
+      </div>
+      <h2 style="font-weight:900;">DUAL // UNO</h2>
+      <p style="color:#9aa6b8; margin-bottom:18px;">Toque para retomar conexão orbital.</p>
+      <button class="btn primary" style="padding:12px 32px;" onclick="closeOverlay()"><i data-lucide="refresh-cw" size="14"></i> RECONECTAR</button>
+    </div>
+  </div>
+
+  <div class="nucleus-container" role="button" aria-label="Nucleus">
+    <div class="nucleus" id="masterNucleus" onclick="app.toggle()">
+      <div class="vibe-pulse"></div>
+      <div class="nucleus-ring"></div>
+      <div id="nucleusIcon"><i data-lucide="power" color="white"></i></div>
+    </div>
+    <span class="nucleus-label" id="nucleusStatus">Standby</span>
+  </div>
+
+  <div id="runtime-view" aria-hidden="true">
+    <div class="runtime-header">
+      <div style="display:flex; align-items:center; gap:10px">
+         <span style="width:8px; height:8px; background:var(--warn); border-radius:50%; box-shadow:0 0 5px var(--warn)"></span>
+         <span style="font-family:var(--font-code); font-size:0.72rem; color:#fff; letter-spacing:1px">RUNTIME // EXECUTOR</span>
+      </div>
+      <button class="btn" style="width:40px; min-width:auto; height:30px" onclick="app.closeRuntime()">
+        <i data-lucide="x" size="16"></i>
+      </button>
+    </div>
+    <div id="iframeContainer" style="flex:1; background:#fff"></div>
+  </div>
+
+  <div class="uno-app" id="appRoot">
+    <div class="glass-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+        <div class="brand">DUAL <span style="font-weight:200; opacity:0.6;">// UNO</span></div>
+        <div class="clock-section">
+          <div class="clock-time" id="time">00:00</div>
+          <div class="clock-date" id="date">SYNCING...</div>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <input type="text" id="userName" class="main-input" placeholder="Identidade do Operador..." autocomplete="off" maxlength="28">
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="rawBtn" onclick="app.toggleRaw()"><i data-lucide="shield-alert" size="14"></i> <span id="rawLabel">Safe</span></button>
+        <button class="btn" id="audioBtn" onclick="app.toggleAudio()"><i data-lucide="volume-2" size="14"></i> <span id="audioLabel">SFX On</span></button>
+        <button class="btn" onclick="app.toggleModule('creator')"><i data-lucide="plus" size="14"></i> Criar</button>
+      </div>
+
+      <div class="module-item" id="mod-creator" style="margin-top:14px; display:none">
+        <div class="module-head" onclick="this.parentElement.classList.toggle('open')">
+          <span style="font-size:0.8rem; font-weight:700; color:var(--accent)">NOVO ARQUIVO</span>
+          <i data-lucide="chevron-down" size="16"></i>
+        </div>
+        <div class="module-body">
+          <textarea id="codeIn" class="code-editor" placeholder="Cole HTML/JS/fragmentos aqui..."></textarea>
+          <div style="display:flex; gap:8px; margin-top:10px;">
+            <input type="text" id="titleIn" placeholder="Nome do Módulo" style="flex:1; background:#0b0b0d; border:1px solid #222; color:#fff; padding:8px 10px; border-radius:8px; font-family:var(--font-code); font-size:0.82rem">
+            <button class="btn primary" onclick="app.saveStack()"><i data-lucide="save"></i> SALVAR</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-card">
+      <div class="btn-row" style="margin-bottom:10px;">
+        <button class="btn" onclick="app.toggleModule('css')">CSS ENV</button>
+        <button class="btn" onclick="app.toggleModule('cli')">TERMINAL</button>
+        <button class="btn" onclick="app.toggleModule('io')">DATA I/O</button>
+      </div>
+
+      <div class="module-item" id="mod-css" style="display:none">
+        <div class="module-body" style="padding-top:0;">
+          <textarea id="cssIn" class="code-editor" style="height:76px; color:var(--accent); border-color:rgba(0,242,255,0.08)" placeholder="body { filter: hue-rotate(0deg); }"></textarea>
+          <div class="btn-row" style="margin-top:8px;">
+            <button class="btn" onclick="app.applyCss()">Aplicar</button>
+            <button class="btn" onclick="app.resetCss()">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="module-item" id="mod-cli" style="display:none">
+        <div class="module-body" style="padding-top:10px;">
+          <div class="terminal-out" id="termOut">UnoOS v2.1. Ready. Type /help.</div>
+          <input type="text" id="termIn" class="main-input" style="padding:10px; font-size:0.8rem; height:40px; margin-top:8px" placeholder="/">
+        </div>
+      </div>
+
+      <div class="module-item" id="mod-io" style="display:none">
+        <div class="module-body" style="padding-top:10px; text-align:center;">
+          <p style="font-size:0.75rem; color:#8f9ab1; margin-bottom:12px;">Persistência de dados locais.</p>
+          <div class="btn-row">
+            <button class="btn" onclick="app.exportData()"><i data-lucide="download"></i> Backup (JSON)</button>
+            <button class="btn" onclick="document.getElementById('fileUpload').click()"><i data-lucide="upload"></i> Restore</button>
+            <input type="file" id="fileUpload" style="display:none" onchange="app.importData(this)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="vault" class="modules-container"></div>
+  </div>
+
+  <div id="toast" class="toast">Ação Concluída</div>
+
+  <script>
+    /* ========= AUDIO (SFX) ========= */
+    const audioSys = {
+      ctx: null, enabled: true,
+      init() { if (!window.AudioContext) return; this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+      playTone(freq, type, duration, vol=0.06) {
+        if(!this.enabled || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type; osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + duration + 0.02);
+      },
+      uiHover() { this.playTone(420, 'sine', 0.08, 0.02); },
+      uiClick() { this.playTone(800, 'triangle', 0.12, 0.04); },
+      uiError() { this.playTone(160, 'sawtooth', 0.28, 0.08); },
+      uiSuccess() { this.playTone(600, 'sine', 0.12, 0.04); setTimeout(()=>this.playTone(1100,'sine',0.18,0.03),120); }
+    };
+
+    /* ========= BACKGROUND CANVAS ========= */
+    const bgSys = {
+      canvas: document.getElementById('space-canvas'),
+      ctx: null, particles: [], mouse: {x:null,y:null},
+      init() {
+        this.ctx = this.canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', ()=>this.resize());
+        window.addEventListener('mousemove', (e)=>{ this.mouse.x = e.clientX; this.mouse.y = e.clientY; });
+        for(let i=0;i<70;i++) this.particles.push(this.createParticle());
+        this.animate();
+      },
+      resize() { this.canvas.width = window.innerWidth; this.canvas.height = window.innerHeight; },
+      createParticle() {
+        return { x: Math.random()*this.canvas.width, y: Math.random()*this.canvas.height, vx:(Math.random()-0.5)*0.4, vy:(Math.random()-0.5)*0.4, size: Math.random()*1.8 + 0.3 };
+      },
+      animate() {
+        const ctx = this.ctx;
+        ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+        this.particles.forEach(p=>{
+          p.x += p.vx; p.y += p.vy;
+          if(p.x<0||p.x>this.canvas.width) p.vx *= -1;
+          if(p.y<0||p.y>this.canvas.height) p.vy *= -1;
+          ctx.fillStyle = 'rgba(255,255,255,0.45)';
+          ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+          if(this.mouse.x){
+            const dx = p.x - this.mouse.x, dy = p.y - this.mouse.y, dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist < 140) {
+              ctx.strokeStyle = `rgba(0,242,255,${1 - dist/140})`; ctx.lineWidth = 0.5;
+              ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(this.mouse.x,this.mouse.y); ctx.stroke();
+            }
+          }
+        });
+        requestAnimationFrame(()=>this.animate());
+      }
+    };
+
+    /* ========= APP CORE ========= */
+    const app = {
+      state: {
+        active: false,
+        raw: false,
+        stacks: JSON.parse(localStorage.getItem('uno_vault_v2') || '[]'),
+        user: localStorage.getItem('uno_user') || ''
+      },
+      idleTimer: null,
+      init() {
+        lucide.createIcons();
+        audioSys.init();
+        bgSys.init();
+        this.updateClock(); setInterval(()=>this.updateClock(), 1000);
+
+        // Wire user field
+        const userIn = document.getElementById('userName');
+        if(this.state.user) { userIn.value = this.state.user; this.checkTeslaVibe(this.state.user); }
+        userIn.addEventListener('input', (e)=> {
+          this.state.user = e.target.value;
+          localStorage.setItem('uno_user', this.state.user);
+          this.checkTeslaVibe(this.state.user);
+        });
+
+        // Terminal input
+        document.getElementById('termIn').addEventListener('keydown', (e)=> { if(e.key==='Enter') this.runCli(e.target.value); });
+
+        // Hover/click sounds
+        document.addEventListener('mouseover', (ev)=> {
+          const btn = ev.target.closest('button, .nucleus, .module-head, .di');
+          if(btn) audioSys.uiHover();
+        });
+        document.addEventListener('click', (ev)=> {
+          const btn = ev.target.closest('button, .nucleus, .module-head, .di');
+          if(btn) audioSys.uiClick();
+        });
+
+        // overlay idle setup
+        this.setupIdle();
+
+        this.renderVault();
+        this.applyRawUI();
+
+        // load saved CSS
+        const savedCss = localStorage.getItem('uno_css');
+        if(savedCss) { document.getElementById('cssIn').value = savedCss; this.applyCss(true); }
+
+        // global icons refresh
+        lucide.createIcons();
+      },
+
+      toggle() {
+        this.state.active = !this.state.active;
+        document.body.classList.toggle('active', this.state.active);
+        document.getElementById('nucleusStatus').innerText = this.state.active ? 'ACTIVE' : 'STANDBY';
+        if(this.state.active) {
+          audioSys.playTone(220,'sine',0.42); setTimeout(()=>audioSys.playTone(620,'sine',0.42),180);
+          // hide overlay if visible
+          document.getElementById('overlay').classList.remove('show');
+        }
+      },
+
+      toggleRaw() {
+        this.state.raw = !this.state.raw;
+        this.applyRawUI();
+      },
+
+      applyRawUI() {
+        const btn = document.getElementById('rawBtn');
+        const label = document.getElementById('rawLabel');
+        if(this.state.raw) {
+          btn.classList.add('warn','active');
+          label.innerText = 'RAW MODE';
+          document.documentElement.style.setProperty('--border','rgba(255,77,77,0.28)');
+        } else {
+          btn.classList.remove('warn'); btn.classList.remove('active');
+          label.innerText = 'Safe';
+          document.documentElement.style.setProperty('--border','rgba(255,255,255,0.08)');
+        }
+      },
+
+      toggleAudio() {
+        audioSys.enabled = !audioSys.enabled;
+        document.getElementById('audioLabel').innerText = audioSys.enabled ? 'SFX ON' : 'SFX OFF';
+        document.getElementById('audioBtn').classList.toggle('active', audioSys.enabled);
+      },
+
+      updateClock() {
+        const now = new Date();
+        document.getElementById('time').innerText = now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+        document.getElementById('date').innerText = now.toLocaleDateString('pt-BR');
+      },
+
+      checkTeslaVibe(name) {
+        if(!name) return document.body.classList.remove('tesla-vibe');
+        const sum = name.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+        let root = sum;
+        while(root > 9) root = String(root).split('').reduce((a,b)=>a+Number(b),0);
+        if([3,6,9].includes(root)) document.body.classList.add('tesla-vibe'); else document.body.classList.remove('tesla-vibe');
+      },
+
+      toggleModule(id) {
+        // hide utilities first
+        ['mod-css','mod-cli','mod-io','mod-creator'].forEach(m=>{
+          if(m !== `mod-${id}`) document.getElementById(m).style.display = 'none';
+        });
+        const el = document.getElementById(`mod-${id}`);
+        if(!el) return;
+        const isHidden = el.style.display === 'none';
+        el.style.display = isHidden ? 'block' : 'none';
+        if(isHidden) el.classList.add('open'); else el.classList.remove('open');
+        lucide.createIcons();
+      },
+
+      /* STACKS */
+      saveStack() {
+        const content = document.getElementById('codeIn').value.trim();
+        const title = document.getElementById('titleIn').value.trim() || "UNTITLED_STACK";
+        if(!content) { audioSys.uiError(); return showToast("Sem conteúdo"); }
+
+        this.state.stacks.unshift({ id: Date.now(), title, content, date: new Date().toLocaleString() });
+        localStorage.setItem('uno_vault_v2', JSON.stringify(this.state.stacks));
+        document.getElementById('codeIn').value = '';
+        document.getElementById('titleIn').value = '';
+        this.renderVault();
+        this.toggleModule('creator');
+        audioSys.uiSuccess();
+        showToast("Módulo salvo");
+      },
+
+      renderVault() {
+        const container = document.getElementById('vault');
+        if(this.state.stacks.length === 0) {
+          container.innerHTML = '<div style="text-align:center; opacity:0.35; font-size:0.78rem; padding:18px; font-family:var(--font-code)">// EMPTY_MEMORY</div>';
+          return;
+        }
+        container.innerHTML = this.state.stacks.map(s=>`
+          <div class="module-item" id="stack-${s.id}">
+            <div class="module-head" onclick="this.parentElement.classList.toggle('open')">
+              <div style="display:flex; flex-direction:column;">
+                <span style="font-size:0.9rem; font-weight:700; color:#fff">${s.title}</span>
+                <span style="font-size:0.58rem; color:#8898ab; font-family:var(--font-code)">ID: ${s.id} • ${s.date}</span>
+              </div>
+              <i data-lucide="chevron-down" size="14"></i>
+            </div>
+            <div class="module-body">
+              <div class="btn-row" style="margin-bottom:10px;">
+                <button class="btn active" style="height:36px" onclick="app.runStack(${s.id})"><i data-lucide="play" size="12"></i> RUN</button>
+                <button class="btn" style="height:36px" onclick="app.deleteStack(${s.id})"><i data-lucide="trash" size="12"></i> DEL</button>
+                <button class="btn" style="height:36px" onclick="app.downloadStack(${s.id})"><i data-lucide="download" size="12"></i> EXPORT</button>
+              </div>
+              <textarea class="code-editor" readonly style="height:120px; font-size:0.78rem; opacity:0.78">${s.content.replace(/</g,'&lt;')}</textarea>
+            </div>
+          </div>
+        `).join('');
+        lucide.createIcons();
+      },
+
+      runStack(id) {
+        const s = this.state.stacks.find(x=>x.id===id);
+        if(!s) return showToast("ID não encontrado");
+        const container = document.getElementById('iframeContainer');
+        const view = document.getElementById('runtime-view');
+
+        const iframe = document.createElement('iframe');
+        iframe.style.width = "100%"; iframe.style.height = "100%"; iframe.style.border = "none";
+        if(!this.state.raw) iframe.setAttribute('sandbox','allow-scripts allow-forms allow-same-origin allow-modals');
+
+        container.innerHTML = '';
+        container.appendChild(iframe);
+
+        const clean = this.state.raw ? s.content : DOMPurify.sanitize(s.content, {ADD_TAGS: ["script","style"], ADD_ATTR: ["onclick"]});
+        // Prefer srcdoc to blob for immediate sandbox behavior
+        iframe.srcdoc = clean;
+
+        view.classList.add('visible');
+        audioSys.playTone(140,'sawtooth',0.42);
+      },
+
+      closeRuntime() {
+        document.getElementById('runtime-view').classList.remove('visible');
+        setTimeout(()=>document.getElementById('iframeContainer').innerHTML = '', 420);
+      },
+
+      deleteStack(id) {
+        if(!confirm("Confirmar exclusão do módulo?")) return;
+        this.state.stacks = this.state.stacks.filter(s=>s.id !== id);
+        localStorage.setItem('uno_vault_v2', JSON.stringify(this.state.stacks));
+        this.renderVault();
+        audioSys.uiHover();
+      },
+
+      downloadStack(id) {
+        const s = this.state.stacks.find(x=>x.id===id);
+        if(!s) return;
+        const blob = new Blob([s.content], {type:'text/plain'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `uno_${id}.html`; a.click();
+        URL.revokeObjectURL(url);
+        showToast("Exportado");
+      },
+
+      applyCss(silent=false) {
+        const css = document.getElementById('cssIn').value;
+        let styleTag = document.getElementById('injected-env-css');
+        if(!styleTag) { styleTag = document.createElement('style'); styleTag.id = 'injected-env-css'; document.head.appendChild(styleTag); }
+        styleTag.textContent = css;
+        localStorage.setItem('uno_css', css);
+        if(!silent) audioSys.uiSuccess();
+      },
+
+      resetCss() { document.getElementById('cssIn').value = ''; this.applyCss(); },
+
+      exportData() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state.stacks));
+        const a = document.createElement('a'); a.href = dataStr; a.download = "uno_backup_" + Date.now() + ".json"; a.click();
+        audioSys.uiSuccess(); showToast("Backup gerado");
+      },
+
+      importData(input) {
+        const file = input.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            if(Array.isArray(data)) {
+              this.state.stacks = [...data, ...this.state.stacks];
+              localStorage.setItem('uno_vault_v2', JSON.stringify(this.state.stacks));
+              this.renderVault();
+              alert("Memory Restore Successful");
+              audioSys.uiSuccess();
+            } else { throw new Error("Formato inválido"); }
+          } catch(err) {
+            alert("Corrupted Data");
+            audioSys.uiError();
+          }
+        };
+        reader.readAsText(file);
+      },
+
+      /* CLI */
+      runCli(cmd) {
+        const out = document.getElementById('termOut');
+        const input = document.getElementById('termIn');
+        const val = cmd.trim();
+        input.value = '';
+        const print = (txt, type='') => { out.innerHTML += `\n<span class="${type}">> ${txt}</span>`; out.scrollTop = out.scrollHeight; };
+        if(!val) return;
+        if(val === '/help') print("CMDS: /clear, /time, /run [id], /raw, /safe, /wipe");
+        else if(val === '/clear') out.innerHTML = 'UnoOS v2.1. Ready.';
+        else if(val === '/time') print(new Date().toString(), 'terminal-line');
+        else if(val.startsWith('/run ')) {
+          const id = parseInt(val.split(' ')[1]);
+          if(this.state.stacks.find(s=>s.id === id)) { this.runStack(id); print(`Executing Sequence ${id}...`, 'terminal-line'); }
+          else print(`ID ${id} not found`, 'terminal-err');
+        } else if(val === '/raw') { this.state.raw = !this.state.raw; this.applyRawUI(); print("Toggle RAW", 'terminal-line'); }
+        else if(val === '/safe') { this.state.raw = false; this.applyRawUI(); print("Safety restored", 'terminal-line'); }
+        else if(val === '/wipe') { print("SYSTEM ERROR: Wipe requires auth level 9.", 'terminal-err'); audioSys.uiError(); }
+        else print(`Unknown command: ${val}`, 'terminal-err');
+      },
+
+      /* IDLE / OVERLAY */
+      setupIdle() {
+        const reset = () => {
+          clearTimeout(this.idleTimer);
+          this.idleTimer = setTimeout(() => {
+            if(!this.state.active) document.getElementById('overlay').classList.add('show');
+          }, 30000); // 30s idle
+        };
+        ['click','mousemove','keypress','touchstart'].forEach(ev => window.addEventListener(ev, reset));
+        reset();
+      }
+    };
+
+    /* ========= TOAST helper + overlay helper ========= */
+    function showToast(msg) {
+      const t = document.getElementById('toast'); t.innerText = msg; t.style.display = 'block';
+      setTimeout(()=> t.style.display = 'none', 1800);
+    }
+    function closeOverlay() {
+      document.getElementById('overlay').classList.remove('show');
+      // when user reconnects via overlay, set active
+      if(!app.state.active) app.toggle();
+    }
+
+    window.onload = () => { app.init(); };
+  </script>
+</body>
+</html>
